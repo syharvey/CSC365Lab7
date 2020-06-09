@@ -10,6 +10,7 @@ import java.util.Scanner;
 import java.util.LinkedHashMap;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -46,6 +47,17 @@ public class InnReservations {
 		case 2:
 		    FR2();
 		    break;
+		case 3:
+		    FR3();
+		    break;
+		case 4:
+		    break;
+		case 5:
+		    break;
+		case 6:
+		    break;
+		default:
+		    System.out.println("Not a viable option. Please select option 1-6\n");
 	    }
 	}
     }
@@ -110,7 +122,10 @@ public class InnReservations {
 
 	    // TODO: fix this to account for weekday/weekend day multipliers
 	    long dateDiff = ChronoUnit.DAYS.between(checkIn, checkOut);
-	    int newRate = 0;
+	    int numWeekdays = 0;
+	    int numWeekend = 0;
+	    double baseRate = 0.0;
+	    double newRate = (double)numWeekdays * baseRate + (double)numWeekend * 1.1 * baseRate;
 	    String roomName = "room name aqui";
 	    String bedType = "bed type aqui";
 	    String updateSql = "INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10105, ?, ?, ?, "+newRate+", ?, ?, ?, ?)";
@@ -132,7 +147,7 @@ public class InnReservations {
 		
 		// Step 5: Handle results
 		if (rowCount == 1) {
-		    System.out.format("Reservation Confirmation%n Name: %s %s%n Room Code: %s%n Room Name: %s%n Bed Type: %s%n Checkin: _%n Checkout: _%n Adults: %d Children %d%n Total Cost: %d%n", firstName, lastName, roomCode, roomName, bedType, numAdults, numChildren, newRate);
+		    System.out.format("Reservation Confirmation%n Name: %s %s%n Room Code: %s%n Room Name: %s%n Bed Type: %s%n Checkin: _%n Checkout: _%n Adults: %d Children %d%n Total Cost: %f%n", firstName, lastName, roomCode, roomName, bedType, numAdults, numChildren, newRate);
 		}
 		conn.commit();
 	    } catch (SQLException e) {
@@ -141,6 +156,88 @@ public class InnReservations {
 	}
     } 
 
+    private void FR3() throws SQLException {
+
+	// Step 1: Establish connection to RDBMS
+	try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+	    // Step 2: Construct SQL statement
+	    Scanner scanner = new Scanner(System.in);
+	    System.out.print("First Name: ");
+	    String firstName = scanner.nextLine();
+	    System.out.print("Last Name: ");
+	    String lastName = scanner.nextLine();
+	    System.out.print("\nYou may indicate 'no change' for the following fields:\nNew Checkin Date (YYYY-MM-DD): ");
+	    String checkInStr = scanner.nextLine();
+	    System.out.print("New Checkout Date (YYYY-MM-DD): ");
+	    String checkOutStr = scanner.nextLine();
+	    System.out.print("Number of Children: ");
+	    String numChildrenStr = scanner.nextLine();
+	    System.out.print("Number of Adults: ");
+	    String numAdultsStr = scanner.nextLine();
+
+	    LocalDate checkIn = LocalDate.MIN;
+	    LocalDate checkOut = LocalDate.MAX;
+	    int numChildren = 100; 
+	    int numAdults = 100;
+	    // get old reservation fields
+	    String selectSql = "SELECT CheckIn, CheckOut, Kids, Adults FROM lab7_reservations where FirstName = ? AND LastName = ?";
+	    try (Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery(selectSql)) {
+		while (rs.next()) {
+		    checkIn = rs.getDate("CheckIn").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		    checkOut = rs.getDate("CheckOut").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();		    
+		    numChildren = rs.getInt("Kids");
+		    numAdults = rs.getInt("Adults");
+		}
+	    }
+	    if (!checkInStr.equals("no change")) 
+	    	checkIn = LocalDate.parse(checkInStr);
+	    if (!checkOutStr.equals("no change"))
+	    	checkOut = LocalDate.parse(checkOutStr);
+	    if (!numChildrenStr.equals("no change"))
+		numChildren = Integer.parseInt(numChildrenStr);
+	    if (!numAdultsStr.equals("no change"))
+		numAdults = Integer.parseInt(numAdultsStr);
+	    // TODO:
+	    // check if new checkin/checkout date is available
+
+	    boolean resAvailable = false;
+	    if (resAvailable == false) {
+		System.out.println("We're sorry. Those reservation dates are unavailable\n");
+		return;
+	    }
+
+	    String updateSql = "UPDATE lab7_reservations SET CheckIn = ?, CheckOut = ?, Kids = ?, Adults = ? WHERE FirstName = ? AND LastName = ?";
+
+	    // Step 3: Start transaction
+	    conn.setAutoCommit(false);
+	    
+	    try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
+		
+		// Step 4: Send SQL statement to DBMS
+		pstmt.setDate(1, java.sql.Date.valueOf(checkIn));
+		pstmt.setDate(2, java.sql.Date.valueOf(checkOut));
+		pstmt.setInt(3, numChildren);
+		pstmt.setInt(4, numAdults);
+		pstmt.setString(5, firstName);
+		pstmt.setString(6, lastName);
+		int rowCount = pstmt.executeUpdate();
+		
+		// Step 5: Handle results
+		if (rowCount == 1)
+		    System.out.print("Updated your reservation%n");
+
+		// Step 6: Commit or rollback transaction
+		conn.commit();
+	    } catch (SQLException e) {
+		conn.rollback();
+	    }
+
+	}
+	// Step 7: Close connection (handled implcitly by try-with-resources syntax)
+    }
     // Demo1 - Establish JDBC connection, execute DDL statement
     private void demo1() throws SQLException {
 
