@@ -51,6 +51,7 @@ public class InnReservations {
 		    FR3();
 		    break;
 		case 4:
+		    FR4();
 		    break;
 		case 5:
 		    break;
@@ -182,9 +183,10 @@ public class InnReservations {
 	    int numChildren = 100; 
 	    int numAdults = 100;
 	    // get old reservation fields
-	    String selectSql = "SELECT CheckIn, CheckOut, Kids, Adults FROM lab7_reservations where FirstName = ? AND LastName = ?";
+	    String selectSql = "SELECT CheckIn, CheckOut, Kids, Adults FROM lab7_reservations where FirstName = "+firstName+" AND LastName = "+lastName;
+	    
 	    try (Statement stmt = conn.createStatement();
-		ResultSet rs = stmt.executeQuery(selectSql)) {
+		ResultSet rs = stmt.executeQuery(selectSql)){
 		while (rs.next()) {
 		    checkIn = rs.getDate("CheckIn").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		    checkOut = rs.getDate("CheckOut").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();		    
@@ -238,6 +240,55 @@ public class InnReservations {
 	}
 	// Step 7: Close connection (handled implcitly by try-with-resources syntax)
     }
+    
+    private void FR4() throws SQLException {
+
+	try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+	    // Step 2: Construct SQL statement
+	    Scanner scanner = new Scanner(System.in);
+	    System.out.print("\nEnter your reservation code: ");
+	    int code = scanner.nextInt();
+	    
+	    String selectSql = "SELECT * from lab7_reservations WHERE code = "+String.valueOf(code);
+
+	    try (Statement stmt = conn.createStatement();
+		 ResultSet rs = stmt.executeQuery(selectSql)) {
+
+		while (rs.next()) {
+		    String roomCode = rs.getString("RoomCode");
+		    LocalDate checkIn = rs.getDate("CheckIn").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		    System.out.format("Are you sure you would like to cancel your reservation for "+roomCode+" on "+checkIn+"? (yes/no): ");
+		}
+	    }
+	    String response = scanner.nextLine();
+	    if (response.equals("no"))
+	        return;
+	    String deleteSql = "DELETE FROM lab7_reservations WHERE CODE = ?";
+
+	    // Step 3: Start transaction
+	    conn.setAutoCommit(false);
+	    
+	    try (PreparedStatement pstmt = conn.prepareStatement(deleteSql)) {
+		
+		// Step 4: Send SQL statement to DBMS
+		pstmt.setInt(1, code);
+		int rowCount = pstmt.executeUpdate();
+		
+		// Step 5: Handle results
+		System.out.format("Removed %d record(s) for reservation %d%n", rowCount, code);
+
+		// Step 6: Commit or rollback transaction
+		conn.commit();
+	    } catch (SQLException e) {
+		conn.rollback();
+	    }
+
+	}
+	// Step 7: Close connection (handled implcitly by try-with-resources syntax)
+    }
+
     // Demo1 - Establish JDBC connection, execute DDL statement
     private void demo1() throws SQLException {
 
