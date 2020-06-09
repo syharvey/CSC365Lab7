@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.LinkedHashMap;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -25,22 +26,121 @@ public class InnReservations {
 	try {
 	    InnReservations ir = new InnReservations();
             ir.initDb();
-	    promptUser(ir);
-	    ir.demo3();
+	    ir.promptUser();
+	    //ir.demo3();
 	} catch (SQLException e) {
 	    System.err.println("SQLException: " + e.getMessage());
 	}
     }
    
-    private static void promptUser(InnReservations ir) {
+    private void promptUser() throws SQLException {
     	Scanner scanner = new Scanner(System.in);
 	int option = 1;
 	while (option != 6) {
-	    System.out.print("Enter a menu option: \n [1] Get Rooms and Rates\n [2] Get Reservations\n [3] Make a Reservation Change\n [4] Cancel Your Reservation\n [5] Get Revenue Summary\n [6] Exit\n:-D ");
+	    System.out.print("\nEnter a menu option:\n\n [1] Get Rooms and Rates\n [2] Get Reservations\n [3] Make a Reservation Change\n [4] Cancel Your Reservation\n [5] Get Revenue Summary\n [6] Exit\n:-D ");
 	    option = scanner.nextInt();
+	    switch(option) {
+	    	case 1:
+		    FR1();	
+		    break;
+		case 2:
+		    FR2();
+		    break;
+	    }
 	}
     }
- 
+    
+    // TODO: need to add next available checkin date and next available reservation
+    private void FR1() throws SQLException {
+
+	try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+	    String sql = "SELECT * from lab7_rooms order by RoomName";
+
+	    try (Statement stmt = conn.createStatement();
+		 ResultSet rs = stmt.executeQuery(sql)) {
+
+		while (rs.next()) {
+		    String roomcode = rs.getString("RoomCode");
+		    String roomname = rs.getString("RoomName");
+		    int numbeds = rs.getInt("Beds");
+		    String bedtype = rs.getString("bedType");
+		    int maxocc = rs.getInt("maxOcc");
+		    int baseprice = rs.getInt("basePrice");
+		    String decor = rs.getString("decor");
+		    System.out.format("%nRoomCode: %s%nRoomName: %s%nBeds: %d%nBedType: %s%nMaxOcc: %d%nBasePrice: %d%nDecor: %s%n", roomcode, roomname, numbeds, bedtype,maxocc,baseprice,decor);
+		}
+	    }
+
+	}
+    }
+
+    private void FR2() throws SQLException {
+
+	try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+	    Scanner scanner = new Scanner(System.in);
+	    System.out.print("First Name: ");
+	    String firstName = scanner.nextLine();
+	    System.out.print("Last Name: ");
+	    String lastName = scanner.nextLine();
+	    System.out.print("Room Code: ");
+	    String roomCode = scanner.nextLine();
+	    System.out.print("Desired Checkin (YYYY-MM-DD): ");
+	    LocalDate checkIn = LocalDate.parse(scanner.nextLine());
+	    System.out.print("Desired Checkout (YYYY-MM-DD): ");
+	    LocalDate checkOut = LocalDate.parse(scanner.nextLine());
+ 	    System.out.print("Number of Children: ");
+	    int numChildren = scanner.nextInt();
+	    System.out.print("Number of Adults: ");
+	    int numAdults = scanner.nextInt();
+
+	    // TODO: check if reservation available
+	    //if not, print out message and return
+	    //if yes, update reservations table and print out confirmations
+	    
+	    boolean resAvailable = false;
+
+	    if (resAvailable == false) {
+	        System.out.println("Reservation could not be made\n");
+	    	return;
+	    }
+
+	    // TODO: fix this to account for weekday/weekend day multipliers
+	    long dateDiff = ChronoUnit.DAYS.between(checkIn, checkOut);
+	    int newRate = 0;
+	    String roomName = "room name aqui";
+	    String bedType = "bed type aqui";
+	    String updateSql = "INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10105, ?, ?, ?, "+newRate+", ?, ?, ?, ?)";
+
+	    // Step 3: Start transaction
+	    conn.setAutoCommit(false);
+	    
+	    try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
+		
+		// Step 4: Send SQL statement to DBMS
+		pstmt.setString(1, roomCode);
+		pstmt.setDate(2, java.sql.Date.valueOf(checkIn));
+		pstmt.setDate(3, java.sql.Date.valueOf(checkOut));
+		pstmt.setString(4, lastName);
+		pstmt.setString(5, firstName);
+		pstmt.setInt(6, numAdults);
+		pstmt.setInt(7, numChildren);
+		int rowCount = pstmt.executeUpdate();
+		
+		// Step 5: Handle results
+		if (rowCount == 1) {
+		    System.out.format("Reservation Confirmation%n Name: %s %s%n Room Code: %s%n Room Name: %s%n Bed Type: %s%n Checkin: _%n Checkout: _%n Adults: %d Children %d%n Total Cost: %d%n", firstName, lastName, roomCode, roomName, bedType, numAdults, numChildren, newRate);
+		}
+		conn.commit();
+	    } catch (SQLException e) {
+		conn.rollback();
+	    }
+	}
+    } 
+
     // Demo1 - Establish JDBC connection, execute DDL statement
     private void demo1() throws SQLException {
 
