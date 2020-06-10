@@ -2,6 +2,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.InputMismatchException;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 
@@ -28,6 +29,7 @@ public class InnReservations {
     private String currentRoom;
     private ArrayList<String> currentList = new ArrayList<String>();
     private int monthCounter = 1;
+    private ArrayList<Integer> monthTotals = new ArrayList<Integer>();
     
     public static void main(String[] args) {
 	try {
@@ -37,10 +39,12 @@ public class InnReservations {
 	    //ir.demo3();
 	} catch (SQLException e) {
 	    System.err.println("SQLException: " + e.getMessage());
+	} catch (InputMismatchException ime) {
+	    System.err.println("InputMismatchException: Please type a valid character");
 	}
     }
    
-    private void promptUser() throws SQLException {
+    private void promptUser() throws SQLException, InputMismatchException {
     	Scanner scanner = new Scanner(System.in);
 	int option = 1;
 	while (option != 6) {
@@ -300,14 +304,26 @@ public class InnReservations {
     }
 
     private void outputRow() {
-    	System.out.println(currentList);
+	while (monthCounter != 13) {
+	    currentList.add("0");
+	    monthCounter++;
+	}
+	System.out.print(currentList.get(0)+":");
+	int total = 0;
+	for (int i=1; i<13; i++) {
+	    if (i == 1) System.out.format("%5s ", currentList.get(i));
+	    else System.out.format("%7s", currentList.get(i));
+	    int newMonthTotal = monthTotals.get(i-1) + Integer.parseInt(currentList.get(i));
+	    monthTotals.set(i-1, newMonthTotal);
+	    total += Integer.parseInt(currentList.get(i));
+	}
+	System.out.format("    %d%n", total);
 	currentList.clear();
 	monthCounter = 1;
     }
 
     private void makeRows(ArrayList<String> revInfo) {
     	String room = revInfo.get(0);
-	// add case where monthCounter = 12 for different room than this room
 	if (!room.equals(currentRoom)) {
 	    outputRow();
 	    currentRoom = room;
@@ -316,12 +332,11 @@ public class InnReservations {
 	int monthNo = Integer.parseInt(revInfo.get(1));
 	String moRev = revInfo.get(2);
 	while (monthNo != monthCounter) {
-	    currentList.add("0.00");
+	    currentList.add("0");
 	    monthCounter++;
 	}
 	currentList.add(moRev);
-	if (monthCounter == 12) monthCounter = 1;
-	else monthCounter++;
+	monthCounter++;
     }
     
     private void FR5() throws SQLException {
@@ -329,12 +344,13 @@ public class InnReservations {
 	try (Connection conn = DriverManager.getConnection(JDBC_URL,
 							   JDBC_USER,
 							   JDBC_PASSWORD)) {
-	    String selectSql = "select Room, month(CheckOut) as Month, round(sum(datediff(day, CheckIn, CheckOut)*Rate),0) as Rev from lab7_reservations join lab7_rooms on Room=RoomCode group by Room, month(CheckOut)";
-	    //String selectSql = "SELECT Room, MONTHNAME(CheckOut) AS Month, ROUND(SUM(RATE*DATEDIFF(CheckOut, CheckIn)),0) AS Rev FROM lab7_reservations JOIN lab7_rooms ON Room=RoomCode GROUP BY Room, MONTHNAME(CheckOut)";
+	    String selectSql = "select Room, month(CheckOut) as Month, round(sum(datediff(day, CheckIn, CheckOut)*Rate),0) as Rev from lab7_reservations join lab7_rooms on Room=RoomCode group by Room, month(CheckOut) order by Room";
 	    int i = 1;
+	    for (int j = 0; j < 12; j++)
+		monthTotals.add(0);
 	    try (Statement stmt = conn.createStatement();
 		 ResultSet rs = stmt.executeQuery(selectSql)) {
-
+		System.out.format("%9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s   %6s%n", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total");
 		while (rs.next()) {
 		    String room = rs.getString("Room");
 		    if (i == 1) {
@@ -342,15 +358,19 @@ public class InnReservations {
 			currentList.add(room);
 		    }
 		    String month = String.valueOf(rs.getInt("Month"));
-		    String moRev = rs.getString("Rev");
+		    String moRev = String.valueOf(rs.getInt("Rev"));
 		    ArrayList<String> revInfo = new ArrayList<String>();
 		    revInfo.add(room);
 		    revInfo.add(month);
 		    revInfo.add(moRev);
 		    makeRows(revInfo);
 		    i++;
-		    //System.out.println(room+" "+month+" "+moRev);
 		}
+		System.out.format("%nTotals:%n    %5s ", String.valueOf(monthTotals.get(0)));
+		for (int k=1; k<12; k++) {
+	    	    System.out.format("%7s", String.valueOf(monthTotals.get(k)));
+		}
+		System.out.println();
 	    }
 	}
     }
