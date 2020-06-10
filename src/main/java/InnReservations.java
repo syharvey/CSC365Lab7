@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.LinkedHashMap;
 import java.time.LocalDate;
+import java.sql.Date;
 import java.time.temporal.ChronoUnit;
 import java.time.ZoneId;
 import java.util.List;
@@ -213,12 +214,9 @@ public class InnReservations {
 
 	    String updateSql = "UPDATE lab7_reservations SET CheckIn = ?, CheckOut = ?, Kids = ?, Adults = ? WHERE FirstName = ? AND LastName = ?";
 
-	    // Step 3: Start transaction
 	    conn.setAutoCommit(false);
 	    
 	    try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-		
-		// Step 4: Send SQL statement to DBMS
 		pstmt.setDate(1, java.sql.Date.valueOf(checkIn));
 		pstmt.setDate(2, java.sql.Date.valueOf(checkOut));
 		pstmt.setInt(3, numChildren);
@@ -227,18 +225,15 @@ public class InnReservations {
 		pstmt.setString(6, lastName);
 		int rowCount = pstmt.executeUpdate();
 		
-		// Step 5: Handle results
 		if (rowCount == 1)
 		    System.out.print("Updated your reservation%n");
 
-		// Step 6: Commit or rollback transaction
 		conn.commit();
 	    } catch (SQLException e) {
 		conn.rollback();
 	    }
 
 	}
-	// Step 7: Close connection (handled implcitly by try-with-resources syntax)
     }
     
     private void FR4() throws SQLException {
@@ -251,17 +246,18 @@ public class InnReservations {
 	    System.out.print("\nEnter your reservation code: ");
 	    int code = scanner.nextInt();
 	    
-	    String selectSql = "SELECT * from lab7_reservations WHERE code = "+String.valueOf(code);
+	    String selectSql = "SELECT * from lab7_reservations WHERE CODE = "+String.valueOf(code);
 
 	    try (Statement stmt = conn.createStatement();
 		 ResultSet rs = stmt.executeQuery(selectSql)) {
 
 		while (rs.next()) {
-		    String roomCode = rs.getString("RoomCode");
-		    LocalDate checkIn = rs.getDate("CheckIn").toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-		    System.out.format("Are you sure you would like to cancel your reservation for "+roomCode+" on "+checkIn+"? (yes/no): ");
+		    String room = rs.getString("Room");
+		    Date checkIn = rs.getDate("CheckIn");
+		    System.out.print("Are you sure you would like to cancel your reservation for "+room+" on "+checkIn+"? (yes/no): ");
 		}
 	    }
+	    scanner.nextLine();
 	    String response = scanner.nextLine();
 	    if (response.equals("no"))
 	        return;
