@@ -14,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.ArrayList;
+import java.lang.Integer;
 
 /*
 Introductory JDBC examples based loosely on the BAKERY dataset from CSC 365 labs.
@@ -23,6 +24,9 @@ public class InnReservations {
     private final String JDBC_URL = "jdbc:h2:~/csc365_lab7";
     private final String JDBC_USER = "";
     private final String JDBC_PASSWORD = "";
+    private String currentRoom;
+    private ArrayList<String> currentList = new ArrayList<String>();
+    private int monthCounter = 1;
     
     public static void main(String[] args) {
 	try {
@@ -55,6 +59,7 @@ public class InnReservations {
 		    FR4();
 		    break;
 		case 5:
+		    FR5();
 		    break;
 		case 6:
 		    break;
@@ -282,10 +287,64 @@ public class InnReservations {
 	    }
 
 	}
-	// Step 7: Close connection (handled implcitly by try-with-resources syntax)
     }
 
-    // Demo1 - Establish JDBC connection, execute DDL statement
+    private void outputRow() {
+    	System.out.println(currentList);
+	currentList.clear();
+	monthCounter = 1;
+    }
+
+    private void makeRows(ArrayList<String> revInfo) {
+    	String room = revInfo.get(0);
+	// add case where monthCounter = 12 for different room than this room
+	if (!room.equals(currentRoom)) {
+	    outputRow();
+	    currentRoom = room;
+	    currentList.add(room);
+	}
+	int monthNo = Integer.parseInt(revInfo.get(1));
+	String moRev = revInfo.get(2);
+	while (monthNo != monthCounter) {
+	    currentList.add("0.00");
+	    monthCounter++;
+	}
+	currentList.add(moRev);
+	if (monthCounter == 12) monthCounter = 1;
+	else monthCounter++;
+    }
+    
+    private void FR5() throws SQLException {
+
+	try (Connection conn = DriverManager.getConnection(JDBC_URL,
+							   JDBC_USER,
+							   JDBC_PASSWORD)) {
+	    String selectSql = "select Room, month(CheckOut) as Month, round(sum(datediff(day, CheckIn, CheckOut)*Rate),0) as Rev from lab7_reservations join lab7_rooms on Room=RoomCode group by Room, month(CheckOut)";
+	    //String selectSql = "SELECT Room, MONTHNAME(CheckOut) AS Month, ROUND(SUM(RATE*DATEDIFF(CheckOut, CheckIn)),0) AS Rev FROM lab7_reservations JOIN lab7_rooms ON Room=RoomCode GROUP BY Room, MONTHNAME(CheckOut)";
+	    int i = 1;
+	    try (Statement stmt = conn.createStatement();
+		 ResultSet rs = stmt.executeQuery(selectSql)) {
+
+		while (rs.next()) {
+		    String room = rs.getString("Room");
+		    if (i == 1) {
+		        currentRoom = room;
+			currentList.add(room);
+		    }
+		    String month = String.valueOf(rs.getInt("Month"));
+		    String moRev = rs.getString("Rev");
+		    ArrayList<String> revInfo = new ArrayList<String>();
+		    revInfo.add(room);
+		    revInfo.add(month);
+		    revInfo.add(moRev);
+		    makeRows(revInfo);
+		    i++;
+		    //System.out.println(room+" "+month+" "+moRev);
+		}
+	    }
+	}
+    }
+
     private void demo1() throws SQLException {
 
 	// Step 0: Load JDBC Driver
