@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 
+import java.util.Calendar;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.LinkedHashMap;
@@ -75,11 +76,16 @@ public class InnReservations {
 	try (Connection conn = DriverManager.getConnection(JDBC_URL,
 							   JDBC_USER,
 							   JDBC_PASSWORD)) {
-	    String sql = "SELECT * from lab7_rooms order by RoomName";
 
-	    try (Statement stmt = conn.createStatement();
-		 ResultSet rs = stmt.executeQuery(sql)) {
+      Calendar c = Calendar.getInstance();
+      java.sql.Date today = new java.sql.Date(c.getTime().getTime());
 
+       String sql = "SELECT RoomCode, RoomName, Beds, bedType, maxOcc, basePrice, decor, MIN(CheckIn) AS Next " + 
+          "from lab7_rooms LEFT OUTER JOIN lab7_reservations ON ((RoomCode = Room) AND (CheckIn > '"+today+"')) GROUP BY RoomCode";
+
+	    try (Statement stmt = conn.createStatement()) {
+
+      ResultSet rs = stmt.executeQuery(sql); 
 		while (rs.next()) {
 		    String roomcode = rs.getString("RoomCode");
 		    String roomname = rs.getString("RoomName");
@@ -88,8 +94,12 @@ public class InnReservations {
 		    int maxocc = rs.getInt("maxOcc");
 		    int baseprice = rs.getInt("basePrice");
 		    String decor = rs.getString("decor");
-		    System.out.format("%nRoomCode: %s%nRoomName: %s%nBeds: %d%nBedType: %s%nMaxOcc: %d%nBasePrice: %d%nDecor: %s%n", roomcode, roomname, numbeds, bedtype,maxocc,baseprice,decor);
-		}
+          String nextReser = rs.getString("Next");
+          if(nextReser == null){ nextReser = "NONE";}
+
+		    System.out.format("%nRoomCode: %s%nRoomName: %s%nBeds: %d%nBedType: %s%nMaxOcc: %d%nBasePrice: %d%nDecor: %s%nNext Reservation: %s%n", 
+                roomcode, roomname, numbeds, bedtype,maxocc,baseprice,decor,nextReser);
+      }
 	    }
 
 	}
@@ -564,6 +574,8 @@ public class InnReservations {
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10489, 'AOB', '2010-02-02', '2010-02-05', 218.75, 'CARISTO', 'MARKITA', 2, 1)"); 
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10500, 'HBB', '2010-08-11', '2010-08-12', 90, 'YESSIOS', 'ANNIS', 1, 0)"); 
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10574, 'FNA', '2010-11-26', '2010-12-03', 287.5, 'SWEAZY', 'ROY', 2, 1)"); 
+		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (99999, 'FNA', '2020-11-26', '2020-12-03', 287.5, 'VONHRESVELG', 'EDELGARD', 2, 1)"); 
+
 
 
 		// create goods table (just an example)
