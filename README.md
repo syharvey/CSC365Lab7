@@ -2,6 +2,7 @@
 
 Group members: Syrsha Harvey and Kattia Chang-Kam
 
-No additional compilation/runtime instructions
+To run the program use:
+./gradlew run -q --console=plain
 
 No known bugs or deficiencies to report
