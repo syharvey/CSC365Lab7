@@ -74,7 +74,7 @@ public class InnReservations {
 	}
     }
     
-    // TODO: need to add next available checkin date and next available reservation
+    // TODO: need to add next available checkin date
     private void FR1() throws SQLException {
 
 	try (Connection conn = DriverManager.getConnection(JDBC_URL,
@@ -84,12 +84,35 @@ public class InnReservations {
       Calendar c = Calendar.getInstance();
       java.sql.Date today = new java.sql.Date(c.getTime().getTime());
 
-       String sql = "SELECT RoomCode, RoomName, Beds, bedType, maxOcc, basePrice, decor, MIN(CheckIn) AS Next " + 
-          "from lab7_rooms LEFT OUTER JOIN lab7_reservations ON ((RoomCode = Room) AND (CheckIn > '"+today+"')) GROUP BY RoomCode";
+       String sql = 
+    "SELECT RoomCode, RoomName, Beds, bedType, maxOcc, basePrice, decor, Next, AvailNext FROM (" +          
+             "SELECT RoomCode, RoomName, Beds, bedType, maxOcc, basePrice, decor, MIN(CheckIn) AS Next " + 
+             "from lab7_rooms LEFT OUTER JOIN lab7_reservations ON ((RoomCode = Room) AND (CheckIn > ?)) GROUP BY RoomCode"
+   + ") AS A INNER JOIN (" + 
+         "SELECT RoomCode AS Room, ? AS AvailNext FROM lab7_rooms LEFT OUTER JOIN lab7_reservations ON RoomCode = Room AND "
+             + "? BETWEEN CheckIn AND CheckOut GROUP BY RoomCode, CheckIn HAVING CheckIn IS NULL" 
+                 
+             +" UNION "+
 
-	    try (Statement stmt = conn.createStatement()) {
+        "SELECT DISTINCT Room, CASE WHEN (MIN(CheckOut) OVER (PARTITION BY Room) = ?) then ? else (MIN(CheckOut) OVER (PARTITION BY Room)) end AS AvailNext FROM (" +
+          "SELECT CODE, Room, CheckIn, CheckOut, IFNULL(DATEDIFF(d, CheckOut, Lead(CheckIn, 1) OVER (PARTITION BY Room ORDER BY CheckIn) ), 1) AS Days FROM lab7_reservations WHERE Room NOT IN ( "+
+             "SELECT RoomCode FROM lab7_rooms LEFT OUTER JOIN lab7_reservations ON RoomCode = Room AND ? BETWEEN CheckIn AND CheckOut GROUP BY RoomCode, CheckIn HAVING CheckIn IS NULL) " +
+             " ORDER BY Room, CheckIn " +
+             ") AS T WHERE (? <= CheckOut) AND Days > 0"+
+      ") AS B ON A.RoomCode = B.Room";
 
-      ResultSet rs = stmt.executeQuery(sql); 
+      try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+      pstmt.setDate(1,today);
+      pstmt.setDate(2,today);
+      pstmt.setDate(3,today);
+      pstmt.setDate(4,today);
+      pstmt.setDate(5,today);
+      pstmt.setDate(6,today);
+      pstmt.setDate(7,today);
+
+      ResultSet rs = pstmt.executeQuery();
+
 		while (rs.next()) {
 		    String roomcode = rs.getString("RoomCode");
 		    String roomname = rs.getString("RoomName");
@@ -98,11 +121,13 @@ public class InnReservations {
 		    int maxocc = rs.getInt("maxOcc");
 		    int baseprice = rs.getInt("basePrice");
 		    String decor = rs.getString("decor");
+          String nextCheckIn = rs.getString("AvailNext");
+          if(nextCheckIn.equals(today.toString())){nextCheckIn = "TODAY";}
           String nextReser = rs.getString("Next");
           if(nextReser == null){ nextReser = "NONE";}
 
-		    System.out.format("%nRoomCode: %s%nRoomName: %s%nBeds: %d%nBedType: %s%nMaxOcc: %d%nBasePrice: %d%nDecor: %s%nNext Reservation: %s%n", 
-                roomcode, roomname, numbeds, bedtype,maxocc,baseprice,decor,nextReser);
+		    System.out.format("%nRoomCode: %s%nRoomName: %s%nBeds: %d%nBedType: %s%nMaxOcc: %d%nBasePrice: %d%nDecor: %s%nNext Check-In: %s%nNext Reservation: %s%n", 
+                roomcode, roomname, numbeds, bedtype,maxocc,baseprice,decor,nextCheckIn,nextReser);
       }
 	    }
 
@@ -519,6 +544,8 @@ public class InnReservations {
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10574, 'AOB', '2020-11-26', '2020-12-03', 287.5, 'SWEAZY', 'ROY', 2, 1)"); 
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (99999, 'FNA', '2020-11-26', '2020-12-03', 287.5, 'VONHRESVELG', 'EDELGARD', 2, 1)"); 
 		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (14839, 'RND', '2020-06-10', '2020-06-16', 150, 'SENG', 'PAPA', 1, 0)"); 
+		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (91019, 'FNA', '2010-01-03', '2010-01-11', 287.5, 'VONRIEGAN', 'CLAUDE', 2, 1)"); 
+		stmt.execute("INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (20202, 'AOB', '2020-06-10', '2020-06-15', 287.5, 'BLAYDDID', 'DIMITRI', 2, 1)"); 
 
 	    }
 	}
