@@ -6,6 +6,8 @@ import java.util.InputMismatchException;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 
+import java.time.temporal.ChronoField;
+import java.time.DayOfWeek;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.Scanner;
@@ -74,7 +76,6 @@ public class InnReservations {
 	}
     }
     
-    // TODO: need to add next available checkin date
     private void FR1() throws SQLException {
 
 	try (Connection conn = DriverManager.getConnection(JDBC_URL,
@@ -155,52 +156,88 @@ public class InnReservations {
 	    System.out.print("Number of Adults: ");
 	    int numAdults = scanner.nextInt();
 
-	    // TODO: check if reservation available
-	    //if not, print out message and return
-	    //if yes, update reservations table and print out confirmations
-	    
-	    boolean resAvailable = false;
-
-	    if (resAvailable == false) {
-	        System.out.println("Reservation could not be made\n");
-	    	return;
-	    }
-
-	    // TODO: fix this to account for weekday/weekend day multipliers
-	    long dateDiff = ChronoUnit.DAYS.between(checkIn, checkOut);
-	    int numWeekdays = 0;
-	    int numWeekend = 0;
-	    double baseRate = 0.0;
-	    double newRate = (double)numWeekdays * baseRate + (double)numWeekend * 1.1 * baseRate;
 	    String roomName = "room name aqui";
 	    String bedType = "bed type aqui";
-	    String updateSql = "INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (10105, ?, ?, ?, "+newRate+", ?, ?, ?, ?)";
+	    double baseRate = 0.0;
 
-	    // Step 3: Start transaction
-	    conn.setAutoCommit(false);
+       boolean isAvailable = true;
+       boolean isLessThanMaxOcc = true;
+       String sqlCheckDates = "SELECT CheckIn, CheckOut FROM lab7_reservations WHERE Room = ?";
+       try(PreparedStatement pstmt = conn.prepareStatement(sqlCheckDates)){
+         pstmt.setString(1, roomCode);
+         ResultSet rs = pstmt.executeQuery();
+         while(rs.next() && isAvailable){
+            Date in = rs.getDate("CheckIn");
+            Date out = rs.getDate("CheckOut");
+         if(((in.compareTo(java.sql.Date.valueOf(checkIn)) <= 0  && java.sql.Date.valueOf(checkIn).compareTo(out) < 0)  && out.compareTo(java.sql.Date.valueOf(checkOut)) <= 0)
+               || (in.compareTo(java.sql.Date.valueOf(checkIn)) <= 0  && out.compareTo(java.sql.Date.valueOf(checkOut)) > 0)
+               || (in.compareTo(java.sql.Date.valueOf(checkOut)) < 0  && out.compareTo(java.sql.Date.valueOf(checkOut)) > 0)){
+              
+               isAvailable = false;
+            } 
+         }
+       }
+
+       String sqlCheckOcc = "SELECT RoomName, bedType, maxOcc, basePrice FROM lab7_Rooms WHERE RoomCode = ?";
+       try(PreparedStatement pstmt = conn.prepareStatement(sqlCheckOcc)){
+          int total = numChildren + numAdults;
+          pstmt.setString(1, roomCode);
+          ResultSet rs = pstmt.executeQuery();
+          while(rs.next()){
+            int occupancy = rs.getInt("maxOcc");
+            roomName = rs.getString("RoomName");
+            bedType = rs.getString("bedType");
+            baseRate = rs.getFloat("basePrice");
+            if(occupancy < total){
+               isLessThanMaxOcc = false;
+            }
+          }
+       }
 	    
-	    try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-		
-		// Step 4: Send SQL statement to DBMS
-		pstmt.setString(1, roomCode);
-		pstmt.setDate(2, java.sql.Date.valueOf(checkIn));
-		pstmt.setDate(3, java.sql.Date.valueOf(checkOut));
-		pstmt.setString(4, lastName);
-		pstmt.setString(5, firstName);
-		pstmt.setInt(6, numAdults);
-		pstmt.setInt(7, numChildren);
-		int rowCount = pstmt.executeUpdate();
-		
-		// Step 5: Handle results
-		if (rowCount == 1) {
-		    System.out.format("Reservation Confirmation%n Name: %s %s%n Room Code: %s%n Room Name: %s%n Bed Type: %s%n Checkin: _%n Checkout: _%n Adults: %d Children %d%n Total Cost: %f%n", firstName, lastName, roomCode, roomName, bedType, numAdults, numChildren, newRate);
-		}
-		conn.commit();
-	    } catch (SQLException e) {
-		conn.rollback();
+       if (isAvailable == false || isLessThanMaxOcc == false) {
+	        System.out.println("Reservation could not be made\n");
 	    }
+
+       else{
+
+   	   long dateDiff = ChronoUnit.DAYS.between(checkIn, checkOut);
+         int numWeekend = getWeekEndDays(checkIn, checkOut);
+	      int numWeekdays = (int)dateDiff - numWeekend;
+         double newRate = (double)numWeekdays * baseRate + (double)numWeekend * 1.1 * baseRate;  
+	      String updateSql = "INSERT INTO lab7_reservations (CODE, Room, CheckIn, CheckOut, Rate, LastName, FirstName, Adults, Kids) VALUES (00000, ?, ?, ?, "+newRate+", ?, ?, ?, ?)";
+
+         try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
+		
+		   // Step 4: Send SQL statement to DBMS
+            pstmt.setString(1, roomCode);
+		      pstmt.setDate(2, java.sql.Date.valueOf(checkIn));
+		      pstmt.setDate(3, java.sql.Date.valueOf(checkOut));
+		      pstmt.setString(4, lastName);
+		      pstmt.setString(5, firstName);
+		      pstmt.setInt(6, numAdults);
+		      pstmt.setInt(7, numChildren);
+		      int rowCount = pstmt.executeUpdate();
+
+		      // Step 5: Handle results
+		      if (rowCount == 1) {
+		         System.out.format("%nReservation Confirmation%n Name: %s %s%n Room Code: %s%n Room Name: %s%n Bed Type: %s%n Checkin: %s%n Checkout: %s%n Adults: %d Children %d%n Total Cost: %.2f%n", firstName, lastName, roomCode, roomName, bedType, checkIn, checkOut, numAdults, numChildren, newRate);
+		      }
+         }	
+      }
 	}
-    } 
+} 
+
+private int getWeekEndDays(LocalDate in, LocalDate out){
+   int count = 0;
+   long dateDiff = ChronoUnit.DAYS.between(in, out);
+   for(int i = 1; i <= (int)dateDiff; i++){
+      DayOfWeek day  = DayOfWeek.of((in.plusDays(i).get(ChronoField.DAY_OF_WEEK)));
+      if(day.toString().equals("SATURDAY") || day.toString().equals("SUNDAY")){
+         count++;
+      }
+   }
+   return count;  
+}
 
     private void FR3() throws SQLException {
 
